@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">IShowedApp</string>
+    <string name="unique_code_label">Unique Code</string>
+    <string name="event_name_label">Event name</string>
+    <string name="event_date_label">Event date</string>
+    <string name="event_details_label">Event details</string>
+    <string name="event_location_label">Event location</string>
+    <string name="event_address_label">Event address</string>
+    <string name="save_event_label">Save</string>
+    <string name="delete_event_menu_item_label" />
+    <string name="clipboard_label">Paste from Clipboard</string>
+    <string name="attendance_label">I am here</string>
 </resources>

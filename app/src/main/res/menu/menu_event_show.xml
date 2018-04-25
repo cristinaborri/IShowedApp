@@ -1,0 +1,10 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="uk.ac.bbk.cristinaborri.whoshowedapp.MainActivity">
+    <item
+        android:id="@+id/delete_event_menu_item"
+        android:icon="@android:drawable/ic_menu_delete"
+        android:title="@string/delete_event_menu_item_label"
+        app:showAsAction="always" />
+</menu>

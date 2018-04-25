@@ -10,8 +10,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     // no access modifier = Package private
     static final String TABLE_EVENT = "event";
-    static final String TABLE_ATTENDEE = "attendee";
-
 
     static final String COLUMN_ID = "id";
     static final String COLUMN_LOCATION_LAT = "location_latitude";
@@ -25,10 +23,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     static final String COLUMN_EVENT_DATE = "date";
     static final String COLUMN_EVENT_NAME = "name";
     static final String COLUMN_EVENT_DETAILS = "details";
-
-    static final String COLUMN_ATTENDEE_NAME = "name";
-    static final String COLUMN_ATTENDEE_EMAIL = "email";
-    static final String COLUMN_ATTENDEE_EVENT_ID= "event_id";
 
     private static final String TABLE_EVENT_CREATE = "CREATE TABLE " + TABLE_EVENT + " (" +
             COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -45,13 +39,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             COLUMN_EVENT_DETAILS + " TEXT " +
             ")";
 
-    private static final String TABLE_ATTENDEE_CREATE = "CREATE TABLE " + TABLE_ATTENDEE + " (" +
-            COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
-            COLUMN_ATTENDEE_NAME + " TEXT, " +
-            COLUMN_ATTENDEE_EMAIL + " TEXT, " +
-            COLUMN_ATTENDEE_EVENT_ID + " INT, " +
-            "FOREIGN KEY(" + COLUMN_ATTENDEE_EVENT_ID + ") REFERENCES " + TABLE_EVENT + "(id) " +
-            ")";
     DatabaseHelper(Context context){
         super(context,DATABASE_NAME,null,DATABASE_VERSION);
     }
@@ -59,14 +46,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onCreate(SQLiteDatabase db) {
         db.execSQL(TABLE_EVENT_CREATE);
-        db.execSQL(TABLE_ATTENDEE_CREATE);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        db.execSQL("DROP TABLE IF EXISTS "+TABLE_ATTENDEE);
         db.execSQL("DROP TABLE IF EXISTS "+TABLE_EVENT);
         db.execSQL(TABLE_EVENT_CREATE);
-        db.execSQL(TABLE_ATTENDEE_CREATE);
     }
 }
