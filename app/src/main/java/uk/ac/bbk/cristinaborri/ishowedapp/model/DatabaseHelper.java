@@ -23,6 +23,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     static final String COLUMN_EVENT_DATE = "date";
     static final String COLUMN_EVENT_NAME = "name";
     static final String COLUMN_EVENT_DETAILS = "details";
+    static final String COLUMN_UNIQUE_CODE = "unique_code";
 
     private static final String TABLE_EVENT_CREATE = "CREATE TABLE " + TABLE_EVENT + " (" +
             COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -36,7 +37,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             COLUMN_MAP_NE_LONG + " DOUBLE, " +
             COLUMN_EVENT_DATE + " LONG, " +
             COLUMN_EVENT_NAME + " TEXT, " +
-            COLUMN_EVENT_DETAILS + " TEXT " +
+            COLUMN_EVENT_DETAILS + " TEXT, " +
+            COLUMN_UNIQUE_CODE + " TEXT " +
             ")";
 
     DatabaseHelper(Context context){

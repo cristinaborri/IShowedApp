@@ -1,11 +1,14 @@
 package uk.ac.bbk.cristinaborri.ishowedapp.model;
 
+import android.util.Base64;
+
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.nio.charset.Charset;
 import java.util.Date;
 
 /**
@@ -46,6 +49,11 @@ public class Event {
      * These are the details of the event
      */
     private String details;
+
+    /**
+     * This is the attendee code to send back to confirm attendancy
+     */
+    private String attendeeUniqueCode;
 
     /**
      * This constructor will create en empty event
@@ -118,36 +126,41 @@ public class Event {
         this.details = details;
     }
 
-    public String jsonSerialize()
+    public String getAttendeeUniqueCode() {
+        return attendeeUniqueCode;
+    }
+
+    private void setAttendeeUniqueCode(String attendeeUniqueCode) {
+        this.attendeeUniqueCode = attendeeUniqueCode;
+    }
+
+    public boolean buildFromCode(String code)
     {
-        JSONObject json = new JSONObject();
-        if(this.getLocationCoordinates() == null) {
-            this.setLocationCoordinates(new LatLng(0,0));
-        }
-        if(this.getDate() == null) {
-            this.setDate(new Date());
-        }
-        if(this.getLocationViewPort() == null) {
-            this.setLocationViewPort(
-                    new LatLngBounds(new LatLng(0,0), new LatLng(0,0))
-            );
-        }
         try {
-            json.put(DatabaseHelper.COLUMN_LOCATION_LONG, this.getLocationCoordinates().longitude);
-            json.put(DatabaseHelper.COLUMN_LOCATION_LAT, this.getLocationCoordinates().latitude);
-            json.put(DatabaseHelper.COLUMN_LOCATION_ADDRESS, this.getLocationAddress());
-            json.put(DatabaseHelper.COLUMN_LOCATION_NAME, this.getLocationName());
-            json.put(DatabaseHelper.COLUMN_MAP_NE_LONG, this.getLocationViewPort().northeast.longitude);
-            json.put(DatabaseHelper.COLUMN_MAP_NE_LAT, this.getLocationViewPort().northeast.latitude);
-            json.put(DatabaseHelper.COLUMN_MAP_SW_LONG, this.getLocationViewPort().southwest.longitude);
-            json.put(DatabaseHelper.COLUMN_MAP_SW_LAT, this.getLocationViewPort().southwest.latitude);
-            json.put(DatabaseHelper.COLUMN_EVENT_DATE, this.getDate().getTime());
-            json.put(DatabaseHelper.COLUMN_EVENT_NAME, this.getName());
-            json.put(DatabaseHelper.COLUMN_EVENT_DETAILS, this.getDetails());
-        } catch (JSONException e) {
-            e.printStackTrace();
+            String jsonString = new String(Base64.decode(code, Base64.NO_WRAP), Charset.defaultCharset());
+            JSONObject jsonObject = new JSONObject(jsonString);
+            String attendeeUid = jsonObject.getString("attendee_uid");
+            setAttendeeUniqueCode(attendeeUid);
+            JSONObject jsonEvent = new JSONObject(jsonObject.getString("event"));
+            setName(jsonEvent.getString(DatabaseHelper.COLUMN_EVENT_NAME));
+            setDetails(jsonEvent.getString(DatabaseHelper.COLUMN_EVENT_DETAILS));
+            setLocationName(jsonEvent.getString(DatabaseHelper.COLUMN_LOCATION_NAME));
+            setLocationAddress(jsonEvent.getString(DatabaseHelper.COLUMN_LOCATION_ADDRESS));
+            setLocationCoordinates(EventDAO.latLngFromCoordinates(
+                    jsonEvent.getDouble(DatabaseHelper.COLUMN_LOCATION_LONG),
+                    jsonEvent.getDouble(DatabaseHelper.COLUMN_LOCATION_LAT)
+            ));
+            setLocationViewPort(EventDAO.viewPortFromCoordinates(
+                    jsonEvent.getDouble(DatabaseHelper.COLUMN_MAP_NE_LONG),
+                    jsonEvent.getDouble(DatabaseHelper.COLUMN_MAP_NE_LAT),
+                    jsonEvent.getDouble(DatabaseHelper.COLUMN_MAP_SW_LONG),
+                    jsonEvent.getDouble(DatabaseHelper.COLUMN_MAP_SW_LAT)
+            ));
+            setDate(new Date(jsonEvent.getLong(DatabaseHelper.COLUMN_EVENT_DATE)));
+            return true;
+        } catch (Exception e) {
+            return false;
         }
-        return json.toString();
     }
 
     @Override

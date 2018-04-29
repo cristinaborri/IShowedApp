@@ -29,7 +29,8 @@ public class EventDAO extends IsaDao {
             DatabaseHelper.COLUMN_MAP_SW_LAT,
             DatabaseHelper.COLUMN_EVENT_DATE,
             DatabaseHelper.COLUMN_EVENT_NAME,
-            DatabaseHelper.COLUMN_EVENT_DETAILS
+            DatabaseHelper.COLUMN_EVENT_DETAILS,
+            DatabaseHelper.COLUMN_UNIQUE_CODE
     };
 
     public EventDAO(Context context){
@@ -131,6 +132,7 @@ public class EventDAO extends IsaDao {
         values.put(DatabaseHelper.COLUMN_EVENT_DATE, event.getDate().getTime());
         values.put(DatabaseHelper.COLUMN_EVENT_NAME, event.getName());
         values.put(DatabaseHelper.COLUMN_EVENT_DETAILS, event.getDetails());
+        values.put(DatabaseHelper.COLUMN_UNIQUE_CODE, event.getAttendeeUniqueCode());
         return values;
     }
 
