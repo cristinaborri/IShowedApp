@@ -155,6 +155,7 @@ public class EventDAO extends IsaDao {
         event.setDate(new Date(cursor.getLong(cursor.getColumnIndex(DatabaseHelper.COLUMN_EVENT_DATE))));
         event.setName(cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_EVENT_NAME)));
         event.setDetails(cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_EVENT_DETAILS)));
+        event.setAttendeeUniqueCode(cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_UNIQUE_CODE)));
 
         return event;
     }

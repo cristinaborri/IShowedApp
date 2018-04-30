@@ -1,19 +1,17 @@
 package uk.ac.bbk.cristinaborri.ishowedapp.activity;
 
+import android.Manifest;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.location.Location;
-import android.net.wifi.p2p.WifiP2pConfig;
-import android.net.wifi.p2p.WifiP2pDevice;
-import android.net.wifi.p2p.WifiP2pManager;
-import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo;
-import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest;
-import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -34,17 +32,30 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.nearby.Nearby;
+import com.google.android.gms.nearby.connection.ConnectionInfo;
+import com.google.android.gms.nearby.connection.ConnectionLifecycleCallback;
+import com.google.android.gms.nearby.connection.ConnectionResolution;
+import com.google.android.gms.nearby.connection.ConnectionsClient;
+import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo;
+import com.google.android.gms.nearby.connection.DiscoveryOptions;
+import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback;
+import com.google.android.gms.nearby.connection.Payload;
+import com.google.android.gms.nearby.connection.PayloadCallback;
+import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
+import com.google.android.gms.nearby.connection.Strategy;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 
-import java.io.DataOutputStream;
-import java.net.Socket;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
-import java.util.Map;
 
 import uk.ac.bbk.cristinaborri.ishowedapp.MainActivity;
 import uk.ac.bbk.cristinaborri.ishowedapp.R;
 import uk.ac.bbk.cristinaborri.ishowedapp.model.Event;
 import uk.ac.bbk.cristinaborri.ishowedapp.model.EventDAO;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Created by cristinaborri.
@@ -57,19 +68,79 @@ public class EventViewActivity extends AppCompatActivity implements
         OnMapReadyCallback,
         LocationListener
 {
+    private static final String TAG = "IShowedApp.EventView";
+    private static final Strategy STRATEGY = Strategy.P2P_STAR;
+
+    private static final String[] REQUIRED_PERMISSIONS =
+            new String[] {
+                    Manifest.permission.BLUETOOTH,
+                    Manifest.permission.BLUETOOTH_ADMIN,
+                    Manifest.permission.ACCESS_WIFI_STATE,
+                    Manifest.permission.CHANGE_WIFI_STATE,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+            };
+
+    private static final int REQUEST_CODE_REQUIRED_PERMISSIONS = 1;
 
     private EventDAO eventData;
     private Event event;
     private GeofencingClient mGeofencingClient;
 
-    private WifiP2pManager mManager;
-    private WifiP2pManager.Channel mChannel;
-    private WifiP2pDnsSdServiceInfo mService;
 
     private static final long GEO_DURATION = 60 * 60 * 1000;
     private static final String GEOFENCE_REQ_ID = "Event Geofence";
     private static final float GEOFENCE_RADIUS = 500.0f; // in meters
+    private ConnectionsClient mConnectionsClient;
 
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        if (!hasPermissions(this, REQUIRED_PERMISSIONS)) {
+            requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_REQUIRED_PERMISSIONS);
+        }
+    }
+
+    /** Returns true if the app was granted all the permissions. Otherwise, returns false. */
+    private static boolean hasPermissions(Context context, String... permissions) {
+        for (String permission : permissions) {
+            if (ContextCompat.checkSelfPermission(context, permission)
+                    != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Handles user acceptance (or denial) of our permission request. */
+    @CallSuper
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode != REQUEST_CODE_REQUIRED_PERMISSIONS) {
+            return;
+        }
+
+        for (int grantResult : grantResults) {
+            if (grantResult == PackageManager.PERMISSION_DENIED) {
+                Toast.makeText(this, "Cannot run the application without all the required permissions", Toast.LENGTH_LONG).show();
+                finish();
+                return;
+            }
+        }
+        recreate();
+    }
+
+
+    @Override
+    protected void onStop() {
+        mConnectionsClient.stopAllEndpoints();
+
+        super.onStop();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,97 +175,115 @@ public class EventViewActivity extends AppCompatActivity implements
 
         mGeofencingClient = LocationServices.getGeofencingClient(this);
 
+        mConnectionsClient = Nearby.getConnectionsClient(this);
+
         Button attendanceButton = findViewById(R.id.record_attendance);
 
         attendanceButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                findServices();
+                mConnectionsClient.sendPayload(event.getName(), Payload.fromBytes(event.getAttendeeUniqueCode().getBytes(UTF_8)));
+                Log.i(TAG, "sent id:" + event.getName());
             }
         });
+
+        startDiscovery();
     }
 
-    public void findServices() {
-        mManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
-        if (mManager != null) {
-            mChannel = mManager.initialize(this, getMainLooper(), null);
-            if (mChannel == null) {
-                //Failure to set up connection
-                Toast t = Toast.makeText(
-                        EventViewActivity.this, "Failed to set up connection with wifi p2p service",
-                        Toast.LENGTH_SHORT
-                );
-                t.show();
-            }
-            mManager.setDnsSdResponseListeners(mChannel,
-                    new WifiP2pManager.DnsSdServiceResponseListener() {
-                        @Override
-                        public void onDnsSdServiceAvailable(String instanceName,
-                                                            String registrationType, WifiP2pDevice device) {
-                            Log.v("s", "A");
-                            Log.v("s", "Service Found: "+instanceName+":"+registrationType);
-
-                        }
-                    },
-                    new WifiP2pManager.DnsSdTxtRecordListener() {
-                        @Override
-                        public void onDnsSdTxtRecordAvailable(String fullDomainName, Map<String, String> record,
-                                                              WifiP2pDevice device) {
-                            Log.v("s", "B");
-                            Log.v("s", device.deviceName);
-                            WifiP2pConfig config = new WifiP2pConfig();
-                            config.deviceAddress = device.deviceAddress;
-                            mManager.connect(mChannel, config, new WifiP2pManager.ActionListener() {
-
-                                @Override
-                                public void onSuccess() {
-                                    //success logic
-                                    int e =  1;
-                                }
-
-                                @Override
-                                public void onFailure(int reason) {
-                                    //failure logic
-                                }
-                            });
-
-                            //new SocketServerTask().execute(device);
-                        }
-                    });
-
-            WifiP2pDnsSdServiceRequest serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
-            mManager.addServiceRequest(mChannel, serviceRequest,
-                    new WifiP2pManager.ActionListener() {
-                        @Override
-                        public void onSuccess() {
-                            Log.v("s", "Added service discovery request");
-                        }
-
-                        @Override
-                        public void onFailure(int error) {
-                            Log.v("s", "Failed adding service discovery request: "+error);
-                        }
-                    });
-
-            mManager.discoverServices(mChannel, new WifiP2pManager.ActionListener() {
+    // Callbacks for receiving payloads
+    private final PayloadCallback mPayloadCallback =
+            new PayloadCallback() {
                 @Override
-                public void onSuccess() {
-                    Log.v("s", "Service discovery initiated");
+                public void onPayloadReceived(@NonNull String endpointId, @NonNull Payload payload) {
+                    Log.i(TAG, "sent");
                 }
 
                 @Override
-                public void onFailure(int arg0) {
-                    Log.v("s", "Service discovery failed");
-                }
-            });
+                public void onPayloadTransferUpdate(@NonNull String endpointId, @NonNull PayloadTransferUpdate update) { }
 
-        } else {
-            Toast t = Toast.makeText(
-                    EventViewActivity.this, "WIFI p2p unavailable",
-                    Toast.LENGTH_SHORT
-            );
-            t.show();
-        }
+            };
+
+    // Callbacks for connections to other devices
+    private final ConnectionLifecycleCallback mConnectionLifecycleCallback =
+            new ConnectionLifecycleCallback() {
+                @Override
+                public void onConnectionInitiated(@NonNull String endpointId, @NonNull ConnectionInfo connectionInfo) {
+                    Log.i(TAG, "connection: accepting connection");
+                    // Automatically accept the connection on both sides.
+                    mConnectionsClient.acceptConnection(endpointId, mPayloadCallback);
+                }
+
+                @Override
+                public void onConnectionResult(@NonNull String endpointId, ConnectionResolution result) {
+                    if (result.getStatus().isSuccess()) {
+                        Log.i(TAG, "connection: connection successful, id:" + endpointId);
+                    } else {
+                        Log.i(TAG, "connection: connection failed");
+                    }
+                }
+
+                @Override
+                public void onDisconnected(@NonNull String endpointId) {
+                    Log.i(TAG, "connection: disconnected");
+                    mConnectionsClient.stopDiscovery();
+                    startDiscovery();
+                }
+            };
+
+    private final EndpointDiscoveryCallback mEndpointDiscoveryCallback =
+            new EndpointDiscoveryCallback() {
+                @Override
+                public void onEndpointFound(@NonNull String endpointId, DiscoveredEndpointInfo discoveredEndpointInfo)
+                {
+                    // An endpoint was found!
+                    mConnectionsClient.requestConnection(
+                            discoveredEndpointInfo.getEndpointName(),
+                            endpointId,
+                            mConnectionLifecycleCallback)
+                            .addOnSuccessListener(
+                                    new OnSuccessListener<Void>() {
+                                        @Override
+                                        public void onSuccess(Void unusedResult) {
+                                            Log.i(TAG, "connection: connecting endpoint");
+                                        }
+                                    })
+                            .addOnFailureListener(
+                                    new OnFailureListener() {
+                                        @Override
+                                        public void onFailure(@NonNull Exception e) {
+                                            Log.i(TAG, "connection: endpoint connection error: " + e.getMessage());
+                                        }
+                                    });
+                }
+
+                @Override
+                public void onEndpointLost(@NonNull String endpointId) {
+                    Log.i(TAG, "connection: endpoint lost");
+                }
+            };
+
+    private void startDiscovery() {
+        mConnectionsClient.startDiscovery(
+                event.getName(),
+                mEndpointDiscoveryCallback,
+                new DiscoveryOptions(STRATEGY))
+                .addOnSuccessListener(
+                        new OnSuccessListener<Void>() {
+                            @Override
+                            public void onSuccess(Void unusedResult) {
+                                // We're discovering!
+                                Log.i(TAG, "connection: discovery started, service_id: "+event.getName());
+
+                            }
+                        })
+                .addOnFailureListener(
+                        new OnFailureListener() {
+                            @Override
+                            public void onFailure(@NonNull Exception e) {
+                                // We were unable to start discovering.
+                                Log.i(TAG, "connection: discovery failed: " + e.getMessage());
+                            }
+                        });
     }
 
 
@@ -210,6 +299,7 @@ public class EventViewActivity extends AppCompatActivity implements
         Intent i;
         switch (item.getItemId()) {
             case android.R.id.home:
+                mConnectionsClient.stopDiscovery();
                 i = new Intent(EventViewActivity.this, MainActivity.class);
                 startActivity(i);
                 return true;
@@ -233,6 +323,7 @@ public class EventViewActivity extends AppCompatActivity implements
                         eventData.open();
                         eventData.removeEvent(event);
                         eventData.close();
+                        mConnectionsClient.stopDiscovery();
                         addDeleteToast();
                         Intent i = new Intent(EventViewActivity.this, MainActivity.class);
                         startActivity(i);
@@ -326,34 +417,4 @@ public class EventViewActivity extends AppCompatActivity implements
 //        }
 //        else askPermission();
     }
-
-    private class SocketServerTask extends AsyncTask<WifiP2pDevice, Void, Void> {
-        private WifiP2pDevice device;
-        private boolean success;
-
-        @Override
-        protected Void doInBackground(WifiP2pDevice... params) {
-            device = params[0];
-            Log.v("s", device.deviceName);// Create a new Socket instance and connect to host
-            Socket socket = null;
-            try {
-                socket = new Socket(device.deviceAddress, 0);
-                DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
-                dataOutputStream.writeUTF(event.getAttendeeUniqueCode());
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Void result) {
-//            if (success) {
-//                Toast.makeText(PlayListTestActivity.this, "Connection Done", Toast.LENGTH_SHORT).show();
-//            } else {
-//                Toast.makeText(PlayListTestActivity.this, "Unable to connect", Toast.LENGTH_SHORT).show();
-//            }
-        }
-    }
-
 }

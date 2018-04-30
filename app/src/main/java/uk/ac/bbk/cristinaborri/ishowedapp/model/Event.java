@@ -130,7 +130,7 @@ public class Event {
         return attendeeUniqueCode;
     }
 
-    private void setAttendeeUniqueCode(String attendeeUniqueCode) {
+    public void setAttendeeUniqueCode(String attendeeUniqueCode) {
         this.attendeeUniqueCode = attendeeUniqueCode;
     }
 
