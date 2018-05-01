@@ -10,4 +10,6 @@
     <string name="delete_event_menu_item_label" />
     <string name="clipboard_label">Paste from Clipboard</string>
     <string name="attendance_label">I am here</string>
+    <string name="reach_location_text">Please reach the Event location. Distance:</string>
+    <string name="searching_service_text">Searching for attendance service..</string>
 </resources>

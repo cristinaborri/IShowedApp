@@ -12,12 +12,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
 import android.widget.Toast;
-
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 
 import uk.ac.bbk.cristinaborri.ishowedapp.MainActivity;
 import uk.ac.bbk.cristinaborri.ishowedapp.R;

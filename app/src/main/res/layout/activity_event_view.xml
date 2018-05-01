@@ -12,12 +12,32 @@
         android:orientation="vertical"
         android:padding="@dimen/view_padding">
 
-        <Button
-            android:id="@+id/record_attendance"
-            style="@android:style/Widget.Material.Button.Colored"
+        <TextView
+            android:id="@+id/reach_location"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:backgroundTint="@android:color/holo_red_dark"
+            android:text="@string/reach_location_text"
+            android:textAppearance="@style/TextAppearance.AppCompat" />
+
+        <TextView
+            android:id="@+id/distance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/delete_event_menu_item_label"
+            android:textAppearance="@style/TextAppearance.AppCompat" />
+
+        <TextView
+            android:id="@+id/searching_service"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/searching_service_text"
+            android:textAppearance="@style/TextAppearance.AppCompat" />
+
+        <Button
+            android:id="@+id/record_attendance"
+            style="@android:style/Widget.Material.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:elevation="0dp"
             android:text="@string/attendance_label" />
 
