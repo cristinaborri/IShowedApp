@@ -224,8 +224,9 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
                     locationUpdated();
                     mCurrentLocation = location;
                 }
-            };
+            }
         };
+        // Start showing the distance
         showDistance();
     }
 
@@ -472,7 +473,8 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
             }
 
             if (mode == ISH_GPS_MODE) {
-                distanceText.setText(String.valueOf(Math.round(distance)) + " meters");
+                String distanceString = String.valueOf(Math.round(distance)) + " meters";
+                distanceText.setText(distanceString);
             }
 
             Log.i(TAG, "location: distance: "+distance);
