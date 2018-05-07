@@ -13,6 +13,11 @@ import com.google.android.gms.tasks.OnSuccessListener;
 
 import uk.ac.bbk.cristinaborri.ishowedapp.activity.EventViewActivity;
 
+/**
+ * Created by Cristina Borri
+ * This class will provide the code to manage the geolocation
+ * using Fused Location Provider
+ */
 public class LocationService {
     private static final String TAG = EventViewActivity.TAG;
 
@@ -63,22 +68,24 @@ public class LocationService {
         };
     }
 
-    public void stopLocationUpdates() {
-        Log.i(TAG, "location: stop updating");
-        mFusedLocationClient.removeLocationUpdates(mLocationCallback);
-        attendanceService.stopDiscovery();
-    }
-
+    // Starts updating the location
     @SuppressLint("MissingPermission")
     public void startLocationUpdates() {
         Log.i(TAG, "location: start updating");
         mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                 mLocationCallback,
                 null /* Looper */);
-        //Starting discovery when is already started raises an
         attendanceService.restartDiscovery();
     }
 
+    // Stops updating the location
+    public void stopLocationUpdates() {
+        Log.i(TAG, "location: stop updating");
+        mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+        attendanceService.stopDiscovery();
+    }
+
+    // Function called every time a new location is received
     private void locationUpdated()
     {
         Location eventLocation = activity.getEventLocation();

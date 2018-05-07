@@ -22,6 +22,11 @@ import uk.ac.bbk.cristinaborri.ishowedapp.activity.EventViewActivity;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+/**
+ * Created by Cristina Borri
+ * This class will provide the code to manage the attendance service discovery
+ * using Google NearBy Connections
+ */
 public class AttendanceService {
     private static final String TAG = EventViewActivity.TAG;
     private static final Strategy STRATEGY = Strategy.P2P_STAR;
@@ -42,7 +47,8 @@ public class AttendanceService {
         mDiscoveryOptions = (new DiscoveryOptions.Builder()).setStrategy(STRATEGY).build();
     }
 
-    // Callbacks for receiving payloads
+    // Callbacks for receiving payloads, the confirmation will be handled here triggering
+    // the activity reaction
     private final PayloadCallback mPayloadCallback =
             new PayloadCallback() {
                 @Override
@@ -92,6 +98,7 @@ public class AttendanceService {
                 }
             };
 
+    // Callbacks for the discovery events
     private final EndpointDiscoveryCallback mEndpointDiscoveryCallback =
             new EndpointDiscoveryCallback() {
                 @Override
@@ -125,8 +132,9 @@ public class AttendanceService {
                 }
             };
 
+    // Begins the discovery of the service, stopping in advance if necessary
     public void restartDiscovery() {
-        // Starting the discovery if already started raises an error stopping is safe
+        // Starting the discovery if already started raises an exception, stopping is safe
         stopDiscovery();
         mConnectionsClient.startDiscovery(
                 serviceName,
@@ -151,6 +159,7 @@ public class AttendanceService {
                         });
     }
 
+    // Stops the discovery of the service
     public void stopDiscovery() {
         if (currentEndpointId != null) {
             mConnectionsClient.disconnectFromEndpoint(currentEndpointId);
@@ -159,6 +168,7 @@ public class AttendanceService {
         Log.i(TAG, "connection: discovery stopped");
     }
 
+    // Sends the code via the service
     public void registerAttendance(String code)
     {
         if (currentEndpointId != null) {
