@@ -1,7 +1,6 @@
 package uk.ac.bbk.cristinaborri.ishowedapp.activity;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -22,34 +21,19 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationResult;
-import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.nearby.Nearby;
-import com.google.android.gms.nearby.connection.ConnectionInfo;
-import com.google.android.gms.nearby.connection.ConnectionLifecycleCallback;
-import com.google.android.gms.nearby.connection.ConnectionResolution;
-import com.google.android.gms.nearby.connection.ConnectionsClient;
-import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo;
-import com.google.android.gms.nearby.connection.DiscoveryOptions;
-import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback;
 import com.google.android.gms.nearby.connection.Payload;
-import com.google.android.gms.nearby.connection.PayloadCallback;
-import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 
 import java.text.SimpleDateFormat;
 import java.util.Locale;
 
+import uk.ac.bbk.cristinaborri.ishowedapp.AttendanceService;
+import uk.ac.bbk.cristinaborri.ishowedapp.LocationService;
 import uk.ac.bbk.cristinaborri.ishowedapp.MainActivity;
 import uk.ac.bbk.cristinaborri.ishowedapp.R;
 import uk.ac.bbk.cristinaborri.ishowedapp.model.Event;
@@ -63,7 +47,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  */
 
 public class EventViewActivity extends AppCompatActivity implements OnMapReadyCallback {
-    private static final String TAG = "IShowedApp.EventView";
+    public static final String TAG = "IShowedApp.EventView";
     private static final Strategy STRATEGY = Strategy.P2P_STAR;
 
     private static final String[] REQUIRED_PERMISSIONS =
@@ -80,26 +64,20 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
 
     private EventDAO eventData;
     private Event event;
-    private String currentEndpointId;
 
     // Values, prefixed to avoid conflicts
-    private static final int ISH_GPS_MODE = 1;
-    private static final int ISH_SEARCH_MODE = 2;
-    private static final int ISH_CONNECTED_MODE = 3;
-    private static final float ISH_RANGE = 100.0f; // in meters
-    private static final long ISH_LOCATION_REQUEST_INTERVAL = 1000; // in milliseconds
+    public static final int ISH_GPS_MODE = 1;
+    public static final int ISH_SEARCH_MODE = 2;
+    public static final int ISH_CONNECTED_MODE = 3;
 
-    private ConnectionsClient mConnectionsClient;
-    private FusedLocationProviderClient mFusedLocationClient;
-    private LocationCallback mLocationCallback;
-    private Location mCurrentLocation;
-    private LocationRequest mLocationRequest;
     private Button attendanceButton;
     private TextView distanceText;
     private TextView reachLocationText;
     private TextView searchingServiceText;
     private Location eventLocation;
     private int mode;
+    private LocationService locationService;
+    private AttendanceService attendanceService;
 
 
     @Override
@@ -143,7 +121,6 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
         recreate();
     }
 
-    @SuppressLint("MissingPermission")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -179,13 +156,6 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
         eventLocation.setLatitude(event.getLocationCoordinates().latitude);
         eventLocation.setLongitude(event.getLocationCoordinates().longitude);
 
-        mConnectionsClient = Nearby.getConnectionsClient(this);
-
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        mLocationRequest = new LocationRequest();
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        mLocationRequest.setInterval(ISH_LOCATION_REQUEST_INTERVAL);
-
         attendanceButton = findViewById(R.id.record_attendance);
         distanceText = findViewById(R.id.distance);
         reachLocationText = findViewById(R.id.reach_location);
@@ -194,156 +164,27 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
         attendanceButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (currentEndpointId != null) {
-                    mConnectionsClient.sendPayload(currentEndpointId, Payload.fromBytes(event.getAttendeeUniqueCode().getBytes(UTF_8)));
-                    Log.i(TAG, "payload sent");
-                }
+                attendanceService.registerAttendance(event.getAttendeeUniqueCode());
             }
         });
 
-        mFusedLocationClient.getLastLocation()
-                .addOnSuccessListener(this, new OnSuccessListener<Location>() {
-                    @Override
-                    public void onSuccess(Location location) {
-                        // Got last known location. In some rare situations this can be null.
-                        if (location != null) {
-                            // Logic to handle location object
-                            locationUpdated();
-                            mCurrentLocation = location;
-                        }
-                    }
-                });
-
-        mLocationCallback = new LocationCallback() {
-            @Override
-            public void onLocationResult(LocationResult locationResult) {
-                if (locationResult == null) {
-                    return;
-                }
-                for (Location location : locationResult.getLocations()) {
-                    locationUpdated();
-                    mCurrentLocation = location;
-                }
-            }
-        };
         // Start showing the distance
         showDistance();
+
+        attendanceService = new AttendanceService(this, event.getName());
+        locationService = new LocationService(this);
     }
 
-    // Callbacks for receiving payloads
-    private final PayloadCallback mPayloadCallback =
-            new PayloadCallback() {
-                @Override
-                public void onPayloadReceived(@NonNull String endpointId, @NonNull Payload payload) {
-                    Log.i(TAG, "received");
-                    // remove event
-                }
-
-                @Override
-                public void onPayloadTransferUpdate(@NonNull String endpointId, @NonNull PayloadTransferUpdate update) { }
-            };
-
-    // Callbacks for connections to other devices
-    private final ConnectionLifecycleCallback mConnectionLifecycleCallback =
-            new ConnectionLifecycleCallback() {
-                @Override
-                public void onConnectionInitiated(@NonNull String endpointId, @NonNull ConnectionInfo connectionInfo) {
-                    Log.i(TAG, "connection: accepting connection, id: "+endpointId);
-                    // Automatically accept the connection on both sides.
-                    if (currentEndpointId != null) {
-                        mConnectionsClient.disconnectFromEndpoint(currentEndpointId);
-                        currentEndpointId = null;
-                    }
-                    mConnectionsClient.acceptConnection(endpointId, mPayloadCallback);
-                }
-
-                @Override
-                public void onConnectionResult(@NonNull String endpointId, ConnectionResolution result) {
-                    if (result.getStatus().isSuccess()) {
-                        Log.i(TAG, "connection: connection successful, id:" + endpointId);
-                        currentEndpointId = endpointId;
-                        showAttendanceButton();
-                    } else {
-                        Log.i(TAG, "connection: connection failed");
-                    }
-                }
-
-                @Override
-                public void onDisconnected(@NonNull String endpointId) {
-                    Log.i(TAG, "connection: disconnected");
-                    if (currentEndpointId.equals(endpointId)) {
-                        currentEndpointId = null;
-                    }
-                    showSearchService();
-                    stopDiscovery();
-                    startDiscovery();
-                }
-            };
-
-    private final EndpointDiscoveryCallback mEndpointDiscoveryCallback =
-            new EndpointDiscoveryCallback() {
-                @Override
-                public void onEndpointFound(@NonNull String endpointId, DiscoveredEndpointInfo discoveredEndpointInfo)
-                {
-                    // An endpoint was found!
-                    mConnectionsClient.requestConnection(
-                            discoveredEndpointInfo.getEndpointName(),
-                            endpointId,
-                            mConnectionLifecycleCallback)
-                            .addOnSuccessListener(
-                                    new OnSuccessListener<Void>() {
-                                        @Override
-                                        public void onSuccess(Void unusedResult) {
-                                            Log.i(TAG, "connection: connecting endpoint");
-                                        }
-                                    })
-                            .addOnFailureListener(
-                                    new OnFailureListener() {
-                                        @Override
-                                        public void onFailure(@NonNull Exception e) {
-                                            Log.i(TAG, "connection: endpoint connection error: " + e.getMessage());
-                                            stopDiscovery();
-                                            startDiscovery();
-                                        }
-                                    });
-                }
-
-                @Override
-                public void onEndpointLost(@NonNull String endpointId) {
-                    Log.i(TAG, "connection: endpoint lost");
-                }
-            };
-
-    private void startDiscovery() {
-        mConnectionsClient.startDiscovery(
-                event.getName(),
-                mEndpointDiscoveryCallback,
-                new DiscoveryOptions(STRATEGY))
-                .addOnSuccessListener(
-                        new OnSuccessListener<Void>() {
-                            @Override
-                            public void onSuccess(Void unusedResult) {
-                                // We're discovering!
-                                Log.i(TAG, "connection: discovery started");
-
-                            }
-                        })
-                .addOnFailureListener(
-                        new OnFailureListener() {
-                            @Override
-                            public void onFailure(@NonNull Exception e) {
-                                // We were unable to start discovering.
-                                Log.i(TAG, "connection: discovery failed: " + e.getMessage());
-                            }
-                        });
+    public AttendanceService getAttendanceService() {
+        return attendanceService;
     }
 
-    private void stopDiscovery() {
-        if (currentEndpointId != null) {
-            mConnectionsClient.disconnectFromEndpoint(currentEndpointId);
-        }
-        mConnectionsClient.stopDiscovery();
-        Log.i(TAG, "connection: discovery stopped");
+    public Location getEventLocation() {
+        return eventLocation;
+    }
+
+    public int getMode() {
+        return mode;
     }
 
     @Override
@@ -358,7 +199,7 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
         Intent i;
         switch (item.getItemId()) {
             case android.R.id.home:
-                stopDiscovery();
+                attendanceService.stopDiscovery();
                 i = new Intent(EventViewActivity.this, MainActivity.class);
                 startActivity(i);
                 return true;
@@ -382,7 +223,7 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
                         eventData.open();
                         eventData.removeEvent(event);
                         eventData.close();
-                        stopDiscovery();
+                        attendanceService.stopDiscovery();
                         addDeleteToast();
                         Intent i = new Intent(EventViewActivity.this, MainActivity.class);
                         startActivity(i);
@@ -409,10 +250,24 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
         t.show();
     }
 
+    public void registrationConfirmed()
+    {
+        eventData.open();
+        eventData.removeEvent(event);
+        eventData.close();
+        attendanceService.stopDiscovery();
+        Toast t = Toast.makeText(
+                EventViewActivity.this, "The attendance for the Event "+ event.getName() + " has been recorded successfully!",
+                Toast.LENGTH_SHORT
+        );
+        t.show();
+        Intent i = new Intent(EventViewActivity.this, MainActivity.class);
+        startActivity(i);
+    }
+
     /**
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we
-     * just add a marker near Africa.
+     * This is where we can add markers or lines, add listeners or move the camera.
+     * We will center the map on the event and add a marker
      */
     @Override
     public void onMapReady(GoogleMap map) {
@@ -426,63 +281,16 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
     @Override
     protected void onResume() {
         super.onResume();
-        stopLocationUpdates();
-        startLocationUpdates();
+        locationService.stopLocationUpdates();
+        locationService.startLocationUpdates();
     }
     @Override
     protected void onPause() {
         super.onPause();
-        stopLocationUpdates();
+        locationService.stopLocationUpdates();
     }
 
-    private void stopLocationUpdates() {
-        Log.i(TAG, "location: stop updating");
-        mFusedLocationClient.removeLocationUpdates(mLocationCallback);
-    }
-
-    @SuppressLint("MissingPermission")
-    private void startLocationUpdates() {
-        Log.i(TAG, "location: start updating");
-        mFusedLocationClient.requestLocationUpdates(mLocationRequest,
-                mLocationCallback,
-                null /* Looper */);
-    }
-    private void locationUpdated()
-    {
-        if (mCurrentLocation != null) {
-
-            float distance = mCurrentLocation.distanceTo(eventLocation);
-
-
-            Log.i(TAG, "location: curr lat: "+ mCurrentLocation.getLatitude());
-            Log.i(TAG, "location: curr long: " + mCurrentLocation.getLongitude());
-            Log.i(TAG, "location: ev lat: " + eventLocation.getLatitude());
-            Log.i(TAG, "location: ev long: " + eventLocation.getLongitude());
-
-
-            if (distance < ISH_RANGE) {
-                if (mode == ISH_GPS_MODE) {
-                    startDiscovery();
-                    showSearchService();
-                }
-            } else {
-                if (mode == ISH_SEARCH_MODE) {
-                    stopDiscovery();
-                    showDistance();
-                }
-            }
-
-            if (mode == ISH_GPS_MODE) {
-                String distanceString = String.valueOf(Math.round(distance)) + " meters";
-                distanceText.setText(distanceString);
-            }
-
-            Log.i(TAG, "location: distance: "+distance);
-        }
-        Log.i(TAG, "location: updated");
-    }
-
-    private void showDistance()
+    public void showDistance()
     {
         attendanceButton.setVisibility(View.GONE);
         searchingServiceText.setVisibility(View.GONE);
@@ -491,7 +299,7 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
         mode = ISH_GPS_MODE;
     }
 
-    private void showSearchService()
+    public void showSearchService()
     {
         attendanceButton.setVisibility(View.GONE);
         searchingServiceText.setVisibility(View.VISIBLE);
@@ -500,12 +308,18 @@ public class EventViewActivity extends AppCompatActivity implements OnMapReadyCa
         mode = ISH_SEARCH_MODE;
     }
 
-    private void showAttendanceButton()
+    public void showAttendanceButton()
     {
         attendanceButton.setVisibility(View.VISIBLE);
         searchingServiceText.setVisibility(View.GONE);
         distanceText.setVisibility(View.GONE);
         reachLocationText.setVisibility(View.GONE);
         mode = ISH_CONNECTED_MODE;
+    }
+
+    public void refreshDistance(float distance)
+    {
+        String distanceString = String.valueOf(Math.round(distance)) + " meters";
+        distanceText.setText(distanceString);
     }
 }

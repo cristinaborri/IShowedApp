@@ -5,7 +5,6 @@ import android.util.Base64;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.nio.charset.Charset;
